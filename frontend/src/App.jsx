@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 
-// Cálculos CASS e IRPF Andorra 2024
+// Cálculos CASS e IRPF Andorra 2026
 const calcCASS = (base) => ({
   employee: Math.round(base * 0.061 * 100) / 100,
   employer: Math.round(base * 0.085 * 100) / 100,
 })
 
-const calcIRPF = (base, cassEmployee) => {
-  const taxable = base - cassEmployee
-  let irpf = 0
-  if (taxable <= 28000) irpf = taxable * 0.05
-  else if (taxable <= 45000) irpf = 1400 + (taxable - 28000) * 0.10
-  else if (taxable <= 67000) irpf = 2900 + (taxable - 45000) * 0.15
-  else if (taxable <= 145000) irpf = 5200 + (taxable - 67000) * 0.20
-  else irpf = 21800 + (taxable - 145000) * 0.24
-  return Math.round(irpf * 100) / 100
+// IRPF Andorra 2026: 0% hasta 24.000€/año | 5% de 24.001€ a 40.000€ | 10% desde 40.001€
+// Se calcula sobre base anual (mensual × 12) y se retiene 1/12 cada mes
+const calcIRPF = (monthlyBase, cassEmployee) => {
+  const monthlyTaxable = monthlyBase - cassEmployee
+  const annualTaxable = monthlyTaxable * 12
+  let annualIRPF = 0
+  if (annualTaxable <= 24000) {
+    annualIRPF = 0
+  } else if (annualTaxable <= 40000) {
+    annualIRPF = (annualTaxable - 24000) * 0.05
+  } else {
+    annualIRPF = (40000 - 24000) * 0.05 + (annualTaxable - 40000) * 0.10
+  }
+  return Math.round((annualIRPF / 12) * 100) / 100
 }
 
 export default function App() {
