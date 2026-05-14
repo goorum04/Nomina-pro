@@ -1,7 +1,7 @@
 {
-  "name": "orx-nomina-frontend",
+  "name": "valira-frontend",
   "version": "1.0.0",
-  "description": "ORX Nómina - Frontend React application",
+  "description": "Valira - Gestión de nóminas en Andorra",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -63,7 +63,7 @@ export default function App() {
   }, [])
 
   const loadCompany = async (userId) => {
-    const { data } = await supabase.from('orx_companies').select('*').eq('owner_id', userId).single()
+    const { data } = await supabase.from('valira_companies').select('*').eq('owner_id', userId).single()
     setCompany(data)
     setLoading(false)
   }
@@ -99,7 +99,7 @@ function AuthPage({ onCompany, page, setPage }) {
     e.preventDefault(); setError(''); setLoading(true)
     const { data, error } = await supabase.auth.signUp({ email: form.email, password: form.password })
     if (error) { setError(error.message); setLoading(false); return }
-    const { data: company, error: cErr } = await supabase.from('orx_companies').insert({ name: form.company_name, owner_id: data.user.id }).select().single()
+    const { data: company, error: cErr } = await supabase.from('valira_companies').insert({ name: form.company_name, owner_id: data.user.id }).select().single()
     if (cErr) { setError(cErr.message); setLoading(false); return }
     onCompany(company)
     setLoading(false)
@@ -264,14 +264,14 @@ function DashboardView({ company }) {
 
   useEffect(() => {
     const load = async () => {
-      const { count } = await supabase.from('orx_employees').select('*', { count: 'exact', head: true }).eq('company_id', company.id).eq('status', 'active')
-      const { data } = await supabase.from('orx_payrolls').select('net_salary, cass_employer, irpf, orx_employees!inner(company_id)').eq('orx_employees.company_id', company.id).eq('status', 'approved')
+      const { count } = await supabase.from('valira_employees').select('*', { count: 'exact', head: true }).eq('company_id', company.id).eq('status', 'active')
+      const { data } = await supabase.from('valira_payrolls').select('net_salary, cass_employer, irpf, valira_employees!inner(company_id)').eq('valira_employees.company_id', company.id).eq('status', 'approved')
       const totalPayroll = data?.reduce((s, p) => s + parseFloat(p.net_salary || 0), 0) || 0
       const totalCass = data?.reduce((s, p) => s + parseFloat(p.cass_employer || 0), 0) || 0
       const totalIRPF = data?.reduce((s, p) => s + parseFloat(p.irpf || 0), 0) || 0
       setStats({ employees: count || 0, payroll: totalPayroll, cass: totalCass, irpf: totalIRPF })
 
-      const { data: emp } = await supabase.from('orx_employees').select('first_name,last_name,position,salary_base').eq('company_id', company.id).eq('status', 'active').order('salary_base', { ascending: false }).limit(5)
+      const { data: emp } = await supabase.from('valira_employees').select('first_name,last_name,position,salary_base').eq('company_id', company.id).eq('status', 'active').order('salary_base', { ascending: false }).limit(5)
       setRecent(emp || [])
     }
     load()
@@ -380,13 +380,13 @@ function EmployeesView({ company }) {
   useEffect(() => { load() }, [])
 
   const load = async () => {
-    const { data } = await supabase.from('orx_employees').select('*').eq('company_id', company.id).order('last_name')
+    const { data } = await supabase.from('valira_employees').select('*').eq('company_id', company.id).order('last_name')
     setEmployees(data || [])
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('')
-    const { error } = await supabase.from('orx_employees').insert({ ...form, company_id: company.id, salary_base: parseFloat(form.salary_base) })
+    const { error } = await supabase.from('valira_employees').insert({ ...form, company_id: company.id, salary_base: parseFloat(form.salary_base) })
     if (error) { setError(error.message); return }
     setShowModal(false)
     setForm({ first_name: '', last_name: '', nif: '', hire_date: '', position: '', salary_base: '', bank_account: '' })
@@ -395,7 +395,7 @@ function EmployeesView({ company }) {
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este empleado? Se eliminarán también sus nóminas.')) return
-    await supabase.from('orx_employees').delete().eq('id', id)
+    await supabase.from('valira_employees').delete().eq('id', id)
     load()
   }
 
@@ -493,11 +493,11 @@ function PayrollView({ company }) {
 
   useEffect(() => { loadPayrolls() }, [month, year])
   useEffect(() => {
-    supabase.from('orx_employees').select('id,first_name,last_name,salary_base').eq('company_id', company.id).eq('status', 'active').then(({ data }) => setEmployees(data || []))
+    supabase.from('valira_employees').select('id,first_name,last_name,salary_base').eq('company_id', company.id).eq('status', 'active').then(({ data }) => setEmployees(data || []))
   }, [])
 
   const loadPayrolls = async () => {
-    const { data } = await supabase.from('orx_payrolls').select('*, orx_employees(first_name, last_name, salary_base)').eq('month', month).eq('year', year).order('created_at')
+    const { data } = await supabase.from('valira_payrolls').select('*, valira_employees(first_name, last_name, salary_base)').eq('month', month).eq('year', year).order('created_at')
     setPayrolls(data || [])
   }
 
@@ -514,14 +514,14 @@ function PayrollView({ company }) {
     // build preview from saved data
     const total = parseFloat(p.salary_base) + parseFloat(p.complements || 0)
     const cass = { employee: parseFloat(p.cass_employee), employer: parseFloat(p.cass_employer) }
-    const emp = { first_name: p.orx_employees?.first_name, last_name: p.orx_employees?.last_name, salary_base: p.salary_base }
+    const emp = { first_name: p.valira_employees?.first_name, last_name: p.valira_employees?.last_name, salary_base: p.salary_base }
     setPreview({ total, cass, irpf: parseFloat(p.irpf), net: parseFloat(p.net_salary), emp })
     setShowModal(true)
   }
 
   const calcPreview = () => {
     const emp = editTarget
-      ? { ...editTarget.orx_employees, salary_base: editTarget.salary_base }
+      ? { ...editTarget.valira_employees, salary_base: editTarget.salary_base }
       : employees.find(e => e.id === genForm.employee_id)
     if (!emp) return
     const base = parseFloat(emp.salary_base)
@@ -535,13 +535,13 @@ function PayrollView({ company }) {
     e.preventDefault()
     if (!preview) return
     if (editTarget) {
-      await supabase.from('orx_payrolls').update({
+      await supabase.from('valira_payrolls').update({
         complements: parseFloat(genForm.complements || 0),
         cass_employee: preview.cass.employee, cass_employer: preview.cass.employer,
         irpf: preview.irpf, net_salary: preview.net,
       }).eq('id', editTarget.id)
     } else {
-      await supabase.from('orx_payrolls').upsert({
+      await supabase.from('valira_payrolls').upsert({
         employee_id: genForm.employee_id, month, year,
         salary_base: preview.emp.salary_base,
         complements: parseFloat(genForm.complements || 0),
@@ -559,19 +559,19 @@ function PayrollView({ company }) {
   }
 
   const handleApprove = async (id) => {
-    await supabase.from('orx_payrolls').update({ status: 'approved' }).eq('id', id)
+    await supabase.from('valira_payrolls').update({ status: 'approved' }).eq('id', id)
     loadPayrolls()
   }
 
   const handleRevert = async (id) => {
     if (!confirm('¿Revertir esta nómina a borrador? Podrá modificarla de nuevo.')) return
-    await supabase.from('orx_payrolls').update({ status: 'draft' }).eq('id', id)
+    await supabase.from('valira_payrolls').update({ status: 'draft' }).eq('id', id)
     loadPayrolls()
   }
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este borrador de nómina?')) return
-    await supabase.from('orx_payrolls').delete().eq('id', id)
+    await supabase.from('valira_payrolls').delete().eq('id', id)
     loadPayrolls()
   }
 
@@ -627,7 +627,7 @@ function PayrollView({ company }) {
           <tbody className="divide-y divide-slate-50">
             {payrolls.map(p => (
               <tr key={p.id} className="hover:bg-slate-50 transition">
-                <td className="px-6 py-4 font-medium text-slate-700 text-sm">{p.orx_employees?.first_name} {p.orx_employees?.last_name}</td>
+                <td className="px-6 py-4 font-medium text-slate-700 text-sm">{p.valira_employees?.first_name} {p.valira_employees?.last_name}</td>
                 <td className="px-6 py-4 text-slate-600 text-sm">€{fmt(parseFloat(p.salary_base) + parseFloat(p.complements))}</td>
                 <td className="px-6 py-4 text-rose-500 text-sm">−€{fmt(p.cass_employee)}</td>
                 <td className="px-6 py-4 text-rose-500 text-sm">−€{fmt(p.irpf)}</td>
@@ -675,7 +675,7 @@ function PayrollView({ company }) {
 
       {showModal && (
         <Modal onClose={closeModal} title={editTarget
-          ? `Editar nómina — ${editTarget.orx_employees?.first_name} ${editTarget.orx_employees?.last_name}`
+          ? `Editar nómina — ${editTarget.valira_employees?.first_name} ${editTarget.valira_employees?.last_name}`
           : `Generar nómina — ${MONTHS[month - 1]} ${year}`}>
           <form onSubmit={handleSave} className="space-y-4">
             {!editTarget && (
@@ -735,7 +735,7 @@ function AttendanceView({ company }) {
   const [dayForm, setDayForm] = useState({ date: '', type: 'work', check_in: '', check_out: '', hours: '', notes: '' })
 
   useEffect(() => {
-    supabase.from('orx_employees').select('id,first_name,last_name').eq('company_id', company.id).eq('status', 'active').order('last_name')
+    supabase.from('valira_employees').select('id,first_name,last_name').eq('company_id', company.id).eq('status', 'active').order('last_name')
       .then(({ data }) => {
         setEmployees(data || [])
         if (data?.length && !selectedEmp) setSelectedEmp(data[0].id)
@@ -747,7 +747,7 @@ function AttendanceView({ company }) {
   const loadRecords = async () => {
     const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const to = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`
-    const { data } = await supabase.from('orx_attendance').select('*').eq('employee_id', selectedEmp).gte('date', from).lte('date', to)
+    const { data } = await supabase.from('valira_attendance').select('*').eq('employee_id', selectedEmp).gte('date', from).lte('date', to)
     const map = {}
     data?.forEach(r => { map[r.date] = r })
     setRecords(map)
@@ -774,7 +774,7 @@ function AttendanceView({ company }) {
       hours: dayForm.hours ? parseFloat(dayForm.hours) : null,
       notes: dayForm.notes || null,
     }
-    await supabase.from('orx_attendance').upsert(payload, { onConflict: 'employee_id,date' })
+    await supabase.from('valira_attendance').upsert(payload, { onConflict: 'employee_id,date' })
     setShowModal(false)
     loadRecords()
   }
@@ -782,7 +782,7 @@ function AttendanceView({ company }) {
   const handleDeleteDay = async () => {
     const rec = records[dayForm.date]
     if (!rec) return
-    await supabase.from('orx_attendance').delete().eq('id', rec.id)
+    await supabase.from('valira_attendance').delete().eq('id', rec.id)
     setShowModal(false)
     loadRecords()
   }
@@ -936,9 +936,9 @@ function ReportsView({ company }) {
   useEffect(() => {
     const load = async () => {
       const { data: payrolls } = await supabase
-        .from('orx_payrolls')
-        .select('month, year, salary_base, complements, cass_employee, cass_employer, irpf, net_salary, status, employee_id, orx_employees!inner(company_id, first_name, last_name, position)')
-        .eq('orx_employees.company_id', company.id)
+        .from('valira_payrolls')
+        .select('month, year, salary_base, complements, cass_employee, cass_employer, irpf, net_salary, status, employee_id, valira_employees!inner(company_id, first_name, last_name, position)')
+        .eq('valira_employees.company_id', company.id)
         .eq('year', reportYear)
         .order('month')
       setData(payrolls || [])
@@ -947,8 +947,8 @@ function ReportsView({ company }) {
       const byEmp = {}
       payrolls?.forEach(p => {
         if (!byEmp[p.employee_id]) byEmp[p.employee_id] = {
-          name: `${p.orx_employees.first_name} ${p.orx_employees.last_name}`,
-          position: p.orx_employees.position,
+          name: `${p.valira_employees.first_name} ${p.valira_employees.last_name}`,
+          position: p.valira_employees.position,
           months: 0, bruto: 0, cassEmp: 0, cassPat: 0, irpf: 0, neto: 0,
         }
         const b = byEmp[p.employee_id]
