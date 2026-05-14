@@ -31,6 +31,8 @@ const Icon = {
   analytics: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>,
   chevLeft: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
   chevRight: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+  menu: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
+  close: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
   euro: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0M8 10.5h4m-4 3h4m9-1.5a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   users: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
   shield: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
@@ -192,8 +194,11 @@ function AuthPage({ onCompany, page, setPage }) {
 }
 
 // ─── Layout principal ─────────────────────────────────────────────────────────
+const BuildingIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+
 function Dashboard({ user, company, onLogout }) {
   const [activePage, setActivePage] = useState('dashboard')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const nav = [
     { key: 'dashboard', label: 'Dashboard', icon: Icon.dashboard },
@@ -203,14 +208,40 @@ function Dashboard({ user, company, onLogout }) {
     { key: 'reports', label: 'Analíticas', icon: Icon.analytics },
   ]
 
+  const navigate = (key) => { setActivePage(key); setMenuOpen(false) }
+
+  const NavLinks = () => (
+    <>
+      <nav className="flex-1 px-3 py-4 space-y-1">
+        {nav.map(({ key, label, icon }) => (
+          <button key={key} onClick={() => navigate(key)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+              activePage === key ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}>
+            {icon}{label}
+          </button>
+        ))}
+      </nav>
+      <div className="px-3 py-4 border-t border-slate-800">
+        <div className="px-3 py-2 mb-2">
+          <p className="text-slate-400 text-xs truncate">{user.email}</p>
+        </div>
+        <button onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          {Icon.logout}Cerrar sesión
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 flex flex-col flex-shrink-0">
+      {/* ── Sidebar desktop ── */}
+      <aside className="hidden md:flex w-64 bg-slate-900 flex-col flex-shrink-0">
         <div className="px-6 py-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+              <BuildingIcon />
             </div>
             <div className="min-w-0">
               <p className="text-white font-semibold text-sm truncate">{company.name}</p>
@@ -218,35 +249,48 @@ function Dashboard({ user, company, onLogout }) {
             </div>
           </div>
         </div>
-
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {nav.map(({ key, label, icon }) => (
-            <button key={key} onClick={() => setActivePage(key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
-                activePage === key
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}>
-              {icon}
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="px-3 py-4 border-t border-slate-800">
-          <div className="px-3 py-2 mb-2">
-            <p className="text-slate-400 text-xs truncate">{user.email}</p>
-          </div>
-          <button onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">
-            {Icon.logout}
-            Cerrar sesión
-          </button>
-        </div>
+        <NavLinks />
       </aside>
 
-      {/* Contenido */}
-      <main className="flex-1 overflow-auto">
+      {/* ── Header mobile ── */}
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 h-14">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
+            <BuildingIcon />
+          </div>
+          <span className="text-white font-bold text-base tracking-wide">Valira</span>
+        </div>
+        <button onClick={() => setMenuOpen(true)} className="text-slate-400 hover:text-white transition p-1 rounded-lg">
+          {Icon.menu}
+        </button>
+      </header>
+
+      {/* ── Drawer mobile ── */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+          <div className="relative w-72 max-w-[85vw] bg-slate-900 flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                  <BuildingIcon />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-semibold text-sm truncate">{company.name}</p>
+                  <p className="text-slate-500 text-xs">Gestión nóminas · AD</p>
+                </div>
+              </div>
+              <button onClick={() => setMenuOpen(false)} className="text-slate-400 hover:text-white transition ml-2 flex-shrink-0">
+                {Icon.close}
+              </button>
+            </div>
+            <NavLinks />
+          </div>
+        </div>
+      )}
+
+      {/* ── Contenido principal ── */}
+      <main className="flex-1 overflow-auto pt-14 md:pt-0 min-w-0">
         {activePage === 'dashboard' && <DashboardView company={company} />}
         {activePage === 'employees' && <EmployeesView company={company} />}
         {activePage === 'payroll' && <PayrollView company={company} />}
@@ -285,7 +329,7 @@ function DashboardView({ company }) {
   ]
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
         <p className="text-slate-500 text-sm mt-1">Resumen acumulado de nóminas aprobadas</p>
@@ -308,7 +352,7 @@ function DashboardView({ company }) {
           <div className="px-6 py-4 border-b border-slate-100">
             <h2 className="font-semibold text-slate-700">Empleados por salario</h2>
           </div>
-          <table className="w-full">
+          <table className="w-full min-w-[600px]">
             <thead><tr className="bg-slate-50">
               <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Empleado</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Cargo</th>
@@ -334,7 +378,7 @@ function DashboardView({ company }) {
         </div>
 
         {/* Info fiscal */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
           <div className="px-6 py-4 border-b border-slate-100">
             <h2 className="font-semibold text-slate-700">Tasas fiscales 2026</h2>
           </div>
@@ -402,7 +446,7 @@ function EmployeesView({ company }) {
   const colors = ['bg-violet-100 text-violet-700', 'bg-indigo-100 text-indigo-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700', 'bg-rose-100 text-rose-700', 'bg-sky-100 text-sky-700']
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Empleados</h1>
@@ -414,8 +458,8 @@ function EmployeesView({ company }) {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead><tr className="bg-slate-50 border-b border-slate-100">
             {['Empleado', 'NIF', 'Cargo', 'Fecha alta', 'Salario bruto', 'Coste empresa', ''].map(h => (
               <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
@@ -583,7 +627,7 @@ function PayrollView({ company }) {
   }), { bruto: 0, cass: 0, irpf: 0, neto: 0 })
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Nóminas</h1>
@@ -617,8 +661,8 @@ function PayrollView({ company }) {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead><tr className="bg-slate-50 border-b border-slate-100">
             {['Empleado', 'Bruto', 'CASS 6,1%', 'IRPF', 'Neto', 'Estado', 'Acciones'].map(h => (
               <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
@@ -804,7 +848,7 @@ function AttendanceView({ company }) {
   const emp = employees.find(e => e.id === selectedEmp)
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Control de presencia</h1>
@@ -832,7 +876,7 @@ function AttendanceView({ company }) {
       </div>
 
       {/* Calendario */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition">{Icon.chevLeft}</button>
           <h2 className="font-semibold text-slate-700">{MONTHS[month]} {year}</h2>
@@ -989,7 +1033,7 @@ function ReportsView({ company }) {
   ]
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Analíticas</h1>
@@ -1050,8 +1094,8 @@ function ReportsView({ company }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
               {['Mes', 'Empleados', 'Masa bruta', 'CASS obrera', 'CASS patronal', 'IRPF', 'Masa neta'].map(h => (
                 <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
@@ -1087,8 +1131,8 @@ function ReportsView({ company }) {
 
       {/* Tab: Por empleado */}
       {tab === 'employee' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
               {['Empleado', 'Cargo', 'Meses', 'Bruto anual', 'CASS obrera', 'CASS patronal', 'IRPF', 'Coste total empresa', 'Neto anual'].map(h => (
                 <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
@@ -1120,7 +1164,7 @@ function ReportsView({ company }) {
       {tab === 'fiscal' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* CASS breakdown */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
             <div className="px-6 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-700">Detalle CASS {reportYear}</h2>
               <p className="text-slate-400 text-xs mt-0.5">Cotizaciones a la seguridad social andorrana</p>
@@ -1142,7 +1186,7 @@ function ReportsView({ company }) {
           </div>
 
           {/* IRPF breakdown */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
             <div className="px-6 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-700">Detalle IRPF {reportYear}</h2>
               <p className="text-slate-400 text-xs mt-0.5">Retenciones a cuenta del impuesto sobre la renta</p>
@@ -1188,13 +1232,13 @@ function Field({ label, required, children }) {
 
 function Modal({ onClose, title, children }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none transition">×</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <h3 className="font-semibold text-slate-800 text-sm sm:text-base truncate pr-2">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none transition p-1 flex-shrink-0">×</button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-5 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   )
