@@ -256,7 +256,7 @@ function DashboardView({ company }) {
         <StatCard label="CASS Patronal Aprobada" value={`€${stats.cass.toFixed(2)}`} color="text-yellow-600" />
       </div>
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="font-semibold text-gray-700 mb-3">Tasas CASS Andorra 2024</h3>
+        <h3 className="font-semibold text-gray-700 mb-3">Tasas CASS Andorra 2026</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="bg-blue-50 rounded p-3">
             <p className="text-gray-500">Cotización Obrera</p>
