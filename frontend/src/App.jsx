@@ -481,6 +481,7 @@ function PayrollView({ company }) {
   const [payrolls, setPayrolls] = useState([])
   const [employees, setEmployees] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [editTarget, setEditTarget] = useState(null) // payroll being edited
   const [genForm, setGenForm] = useState({ employee_id: '', complements: '' })
   const [preview, setPreview] = useState(null)
 
@@ -490,35 +491,81 @@ function PayrollView({ company }) {
   }, [])
 
   const loadPayrolls = async () => {
-    const { data } = await supabase.from('orx_payrolls').select('*, orx_employees(first_name, last_name)').eq('month', month).eq('year', year).order('created_at')
+    const { data } = await supabase.from('orx_payrolls').select('*, orx_employees(first_name, last_name, salary_base)').eq('month', month).eq('year', year).order('created_at')
     setPayrolls(data || [])
   }
 
+  const openNew = () => {
+    setEditTarget(null)
+    setGenForm({ employee_id: '', complements: '' })
+    setPreview(null)
+    setShowModal(true)
+  }
+
+  const openEdit = (p) => {
+    setEditTarget(p)
+    setGenForm({ employee_id: p.employee_id, complements: String(p.complements || 0) })
+    // build preview from saved data
+    const total = parseFloat(p.salary_base) + parseFloat(p.complements || 0)
+    const cass = { employee: parseFloat(p.cass_employee), employer: parseFloat(p.cass_employer) }
+    const emp = { first_name: p.orx_employees?.first_name, last_name: p.orx_employees?.last_name, salary_base: p.salary_base }
+    setPreview({ total, cass, irpf: parseFloat(p.irpf), net: parseFloat(p.net_salary), emp })
+    setShowModal(true)
+  }
+
   const calcPreview = () => {
-    const emp = employees.find(e => e.id === genForm.employee_id)
+    const emp = editTarget
+      ? { ...editTarget.orx_employees, salary_base: editTarget.salary_base }
+      : employees.find(e => e.id === genForm.employee_id)
     if (!emp) return
-    const total = parseFloat(emp.salary_base) + parseFloat(genForm.complements || 0)
+    const base = parseFloat(emp.salary_base)
+    const total = base + parseFloat(genForm.complements || 0)
     const cass = calcCASS(total)
     const irpf = calcIRPF(total, cass.employee)
     setPreview({ total, cass, irpf, net: total - cass.employee - irpf, emp })
   }
 
-  const handleGenerate = async (e) => {
+  const handleSave = async (e) => {
     e.preventDefault()
     if (!preview) return
-    await supabase.from('orx_payrolls').upsert({
-      employee_id: genForm.employee_id, month, year,
-      salary_base: preview.emp.salary_base,
-      complements: parseFloat(genForm.complements || 0),
-      cass_employee: preview.cass.employee, cass_employer: preview.cass.employer,
-      irpf: preview.irpf, net_salary: preview.net, status: 'draft',
-    })
-    setShowModal(false); setPreview(null); setGenForm({ employee_id: '', complements: '' })
+    if (editTarget) {
+      await supabase.from('orx_payrolls').update({
+        complements: parseFloat(genForm.complements || 0),
+        cass_employee: preview.cass.employee, cass_employer: preview.cass.employer,
+        irpf: preview.irpf, net_salary: preview.net,
+      }).eq('id', editTarget.id)
+    } else {
+      await supabase.from('orx_payrolls').upsert({
+        employee_id: genForm.employee_id, month, year,
+        salary_base: preview.emp.salary_base,
+        complements: parseFloat(genForm.complements || 0),
+        cass_employee: preview.cass.employee, cass_employer: preview.cass.employer,
+        irpf: preview.irpf, net_salary: preview.net, status: 'draft',
+      })
+    }
+    closeModal()
     loadPayrolls()
+  }
+
+  const closeModal = () => {
+    setShowModal(false); setEditTarget(null); setPreview(null)
+    setGenForm({ employee_id: '', complements: '' })
   }
 
   const handleApprove = async (id) => {
     await supabase.from('orx_payrolls').update({ status: 'approved' }).eq('id', id)
+    loadPayrolls()
+  }
+
+  const handleRevert = async (id) => {
+    if (!confirm('¿Revertir esta nómina a borrador? Podrá modificarla de nuevo.')) return
+    await supabase.from('orx_payrolls').update({ status: 'draft' }).eq('id', id)
+    loadPayrolls()
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Eliminar este borrador de nómina?')) return
+    await supabase.from('orx_payrolls').delete().eq('id', id)
     loadPayrolls()
   }
 
@@ -545,7 +592,7 @@ function PayrollView({ company }) {
             className="bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400 shadow-sm">
             {[2024, 2025, 2026].map(y => <option key={y}>{y}</option>)}
           </select>
-          <button onClick={() => setShowModal(true)}
+          <button onClick={openNew}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-sm">
             {Icon.plus} Generar nómina
           </button>
@@ -567,7 +614,7 @@ function PayrollView({ company }) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">
-            {['Empleado', 'Bruto', 'CASS 6,1%', 'IRPF', 'Neto', 'Estado', ''].map(h => (
+            {['Empleado', 'Bruto', 'CASS 6,1%', 'IRPF', 'Neto', 'Estado', 'Acciones'].map(h => (
               <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
             ))}
           </tr></thead>
@@ -588,12 +635,28 @@ function PayrollView({ company }) {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  {p.status === 'draft' && (
-                    <button onClick={() => handleApprove(p.id)}
-                      className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-medium px-3 py-1.5 rounded-lg transition">
-                      Aprobar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {p.status === 'draft' && (<>
+                      <button onClick={() => openEdit(p)}
+                        className="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium px-3 py-1.5 rounded-lg transition">
+                        Editar
+                      </button>
+                      <button onClick={() => handleApprove(p.id)}
+                        className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-medium px-3 py-1.5 rounded-lg transition">
+                        Aprobar
+                      </button>
+                      <button onClick={() => handleDelete(p.id)}
+                        className="text-slate-300 hover:text-rose-500 transition p-1">
+                        {Icon.trash}
+                      </button>
+                    </>)}
+                    {p.status === 'approved' && (
+                      <button onClick={() => handleRevert(p.id)}
+                        className="text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 font-medium px-3 py-1.5 rounded-lg transition">
+                        Revertir
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -605,14 +668,18 @@ function PayrollView({ company }) {
       </div>
 
       {showModal && (
-        <Modal onClose={() => { setShowModal(false); setPreview(null) }} title={`Generar nómina — ${MONTHS[month - 1]} ${year}`}>
-          <form onSubmit={handleGenerate} className="space-y-4">
-            <Field label="Empleado">
-              <select required value={genForm.employee_id} onChange={e => { setGenForm({ ...genForm, employee_id: e.target.value }); setPreview(null) }} className={input}>
-                <option value="">Seleccionar...</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} — €{fmt(emp.salary_base)}</option>)}
-              </select>
-            </Field>
+        <Modal onClose={closeModal} title={editTarget
+          ? `Editar nómina — ${editTarget.orx_employees?.first_name} ${editTarget.orx_employees?.last_name}`
+          : `Generar nómina — ${MONTHS[month - 1]} ${year}`}>
+          <form onSubmit={handleSave} className="space-y-4">
+            {!editTarget && (
+              <Field label="Empleado">
+                <select required value={genForm.employee_id} onChange={e => { setGenForm({ ...genForm, employee_id: e.target.value }); setPreview(null) }} className={input}>
+                  <option value="">Seleccionar...</option>
+                  {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} — €{fmt(emp.salary_base)}</option>)}
+                </select>
+              </Field>
+            )}
             <Field label="Complementos (€)">
               <input type="number" placeholder="0,00" min="0" step="0.01" className={input}
                 value={genForm.complements} onChange={e => { setGenForm({ ...genForm, complements: e.target.value }); setPreview(null) }} />
@@ -632,7 +699,7 @@ function PayrollView({ company }) {
             )}
             <button type="submit" disabled={!preview}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition disabled:opacity-40 text-sm">
-              Guardar nómina
+              {editTarget ? 'Guardar cambios' : 'Guardar nómina'}
             </button>
           </form>
         </Modal>
