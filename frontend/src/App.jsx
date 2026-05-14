@@ -113,13 +113,13 @@ function AuthPage({ onCompany, page, setPage }) {
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
             {Icon.building}
           </div>
-          <span className="text-white font-bold text-xl tracking-wide">ORX Nómina</span>
+          <span className="text-white font-bold text-xl tracking-wide">Valira</span>
         </div>
         <div>
           <h1 className="text-4xl font-bold text-white leading-tight mb-4">
             Gestión de nóminas<br />para Andorra.
           </h1>
-          <p className="text-indigo-200 text-lg mb-8">CASS e IRPF calculados automáticamente según la normativa andorrana 2026.</p>
+          <p className="text-indigo-200 text-lg mb-8">CASS e IRPF calculados automáticamente según la normativa andorrana vigente.</p>
           <div className="space-y-3">
             {['Cálculo automático CASS 6.1% / 8.5%', 'IRPF Andorra 2026 actualizado', 'Dashboard con métricas en tiempo real'].map(f => (
               <div key={f} className="flex items-center gap-3 text-indigo-100">
@@ -129,7 +129,7 @@ function AuthPage({ onCompany, page, setPage }) {
             ))}
           </div>
         </div>
-        <p className="text-indigo-300 text-sm">© 2026 ORX Nómina · Andorra</p>
+        <p className="text-indigo-300 text-sm">© 2026 Valira — El Principat d'Andorra</p>
       </div>
 
       {/* Panel derecho */}
@@ -137,7 +137,7 @@ function AuthPage({ onCompany, page, setPage }) {
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 mb-10">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">{Icon.building}</div>
-            <span className="text-white font-bold text-lg">ORX Nómina</span>
+            <span className="text-white font-bold text-lg">Valira</span>
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-1">
@@ -214,7 +214,7 @@ function Dashboard({ user, company, onLogout }) {
             </div>
             <div className="min-w-0">
               <p className="text-white font-semibold text-sm truncate">{company.name}</p>
-              <p className="text-slate-500 text-xs">ORX Nómina 2026</p>
+              <p className="text-slate-500 text-xs">Gestión nóminas · AD</p>
             </div>
           </div>
         </div>
