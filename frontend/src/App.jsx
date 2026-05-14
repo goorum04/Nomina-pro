@@ -27,6 +27,10 @@ const Icon = {
   reports: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
   logout: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
   plus: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+  calendar: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  analytics: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>,
+  chevLeft: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+  chevRight: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
   euro: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0M8 10.5h4m-4 3h4m9-1.5a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   users: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
   shield: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
@@ -195,7 +199,8 @@ function Dashboard({ user, company, onLogout }) {
     { key: 'dashboard', label: 'Dashboard', icon: Icon.dashboard },
     { key: 'employees', label: 'Empleados', icon: Icon.employees },
     { key: 'payroll', label: 'Nóminas', icon: Icon.payroll },
-    { key: 'reports', label: 'Reportes', icon: Icon.reports },
+    { key: 'attendance', label: 'Presencia', icon: Icon.calendar },
+    { key: 'reports', label: 'Analíticas', icon: Icon.analytics },
   ]
 
   return (
@@ -245,6 +250,7 @@ function Dashboard({ user, company, onLogout }) {
         {activePage === 'dashboard' && <DashboardView company={company} />}
         {activePage === 'employees' && <EmployeesView company={company} />}
         {activePage === 'payroll' && <PayrollView company={company} />}
+        {activePage === 'attendance' && <AttendanceView company={company} />}
         {activePage === 'reports' && <ReportsView company={company} />}
       </main>
     </div>
@@ -708,91 +714,460 @@ function PayrollView({ company }) {
   )
 }
 
-// ─── Reportes ─────────────────────────────────────────────────────────────────
+// ─── Presencia ────────────────────────────────────────────────────────────────
+const DAYS_ES = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+const TYPE_META = {
+  work:     { label: 'Trabajo',      bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  vacation: { label: 'Vacaciones',   bg: 'bg-blue-100',    text: 'text-blue-700',    dot: 'bg-blue-500' },
+  sick:     { label: 'Baja médica',  bg: 'bg-rose-100',    text: 'text-rose-700',    dot: 'bg-rose-500' },
+  absence:  { label: 'Ausencia',     bg: 'bg-amber-100',   text: 'text-amber-700',   dot: 'bg-amber-500' },
+  holiday:  { label: 'Festivo',      bg: 'bg-slate-100',   text: 'text-slate-500',   dot: 'bg-slate-400' },
+}
+
+function AttendanceView({ company }) {
+  const today = new Date()
+  const [month, setMonth] = useState(today.getMonth())
+  const [year, setYear] = useState(today.getFullYear())
+  const [employees, setEmployees] = useState([])
+  const [selectedEmp, setSelectedEmp] = useState(null)
+  const [records, setRecords] = useState({}) // keyed by date string YYYY-MM-DD
+  const [showModal, setShowModal] = useState(false)
+  const [dayForm, setDayForm] = useState({ date: '', type: 'work', check_in: '', check_out: '', hours: '', notes: '' })
+
+  useEffect(() => {
+    supabase.from('orx_employees').select('id,first_name,last_name').eq('company_id', company.id).eq('status', 'active').order('last_name')
+      .then(({ data }) => {
+        setEmployees(data || [])
+        if (data?.length && !selectedEmp) setSelectedEmp(data[0].id)
+      })
+  }, [])
+
+  useEffect(() => { if (selectedEmp) loadRecords() }, [selectedEmp, month, year])
+
+  const loadRecords = async () => {
+    const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const to = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`
+    const { data } = await supabase.from('orx_attendance').select('*').eq('employee_id', selectedEmp).gte('date', from).lte('date', to)
+    const map = {}
+    data?.forEach(r => { map[r.date] = r })
+    setRecords(map)
+  }
+
+  const openDay = (dayStr) => {
+    const existing = records[dayStr]
+    if (existing) {
+      setDayForm({ date: dayStr, type: existing.type, check_in: existing.check_in || '', check_out: existing.check_out || '', hours: existing.hours || '', notes: existing.notes || '' })
+    } else {
+      setDayForm({ date: dayStr, type: 'work', check_in: '09:00', check_out: '17:00', hours: '8', notes: '' })
+    }
+    setShowModal(true)
+  }
+
+  const handleSaveDay = async (e) => {
+    e.preventDefault()
+    const payload = {
+      employee_id: selectedEmp,
+      date: dayForm.date,
+      type: dayForm.type,
+      check_in: dayForm.check_in || null,
+      check_out: dayForm.check_out || null,
+      hours: dayForm.hours ? parseFloat(dayForm.hours) : null,
+      notes: dayForm.notes || null,
+    }
+    await supabase.from('orx_attendance').upsert(payload, { onConflict: 'employee_id,date' })
+    setShowModal(false)
+    loadRecords()
+  }
+
+  const handleDeleteDay = async () => {
+    const rec = records[dayForm.date]
+    if (!rec) return
+    await supabase.from('orx_attendance').delete().eq('id', rec.id)
+    setShowModal(false)
+    loadRecords()
+  }
+
+  // Build calendar grid (Mon-first)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7 // Mon=0
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const stats = Object.values(records).reduce((acc, r) => {
+    acc[r.type] = (acc[r.type] || 0) + 1; return acc
+  }, {})
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }
+
+  const emp = employees.find(e => e.id === selectedEmp)
+
+  return (
+    <div className="p-8 space-y-6">
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Control de presencia</h1>
+          <p className="text-slate-500 text-sm mt-1">Fichaje, vacaciones y ausencias</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <select value={selectedEmp || ''} onChange={e => setSelectedEmp(e.target.value)}
+            className="bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400 shadow-sm">
+            {employees.map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Resumen rápido */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {Object.entries(TYPE_META).map(([type, meta]) => (
+          <div key={type} className={`rounded-2xl border border-slate-100 p-4 flex items-center gap-3 bg-white`}>
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 ${meta.dot}`}></div>
+            <div>
+              <p className="text-xs text-slate-400 font-medium">{meta.label}</p>
+              <p className="text-xl font-bold text-slate-700">{stats[type] || 0}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Calendario */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition">{Icon.chevLeft}</button>
+          <h2 className="font-semibold text-slate-700">{MONTHS[month]} {year}</h2>
+          <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition">{Icon.chevRight}</button>
+        </div>
+
+        <div className="p-4">
+          {/* Cabecera días */}
+          <div className="grid grid-cols-7 mb-2">
+            {DAYS_ES.map(d => (
+              <div key={d} className={`text-center text-xs font-semibold py-2 ${d === 'S' || d === 'D' ? 'text-slate-400' : 'text-slate-500'}`}>{d}</div>
+            ))}
+          </div>
+          {/* Celdas */}
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((day, i) => {
+              if (!day) return <div key={`e${i}`} />
+              const dow = (firstDow + day - 1) % 7 // 0=Mon
+              const isWeekend = dow >= 5
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const rec = records[dateStr]
+              const meta = rec ? TYPE_META[rec.type] : null
+              const isToday = dateStr === today.toISOString().slice(0, 10)
+              return (
+                <button key={day} onClick={() => openDay(dateStr)}
+                  className={`relative rounded-xl p-2 min-h-[52px] text-left transition hover:ring-2 hover:ring-indigo-300
+                    ${meta ? meta.bg : isWeekend ? 'bg-slate-50' : 'bg-white hover:bg-slate-50'}
+                    ${isToday ? 'ring-2 ring-indigo-400' : 'border border-slate-100'}`}>
+                  <span className={`text-xs font-semibold ${meta ? meta.text : isWeekend ? 'text-slate-400' : 'text-slate-600'}`}>{day}</span>
+                  {rec && (
+                    <p className={`text-[10px] mt-0.5 leading-tight ${meta.text} font-medium`}>
+                      {rec.type === 'work' && rec.hours ? `${rec.hours}h` : meta.label}
+                    </p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Leyenda */}
+        <div className="px-6 pb-4 flex flex-wrap gap-3">
+          {Object.entries(TYPE_META).map(([type, meta]) => (
+            <div key={type} className="flex items-center gap-1.5">
+              <div className={`w-2.5 h-2.5 rounded-full ${meta.dot}`}></div>
+              <span className="text-xs text-slate-500">{meta.label}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 ring-1 ring-indigo-400"></div>
+            <span className="text-xs text-slate-500">Hoy</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal día */}
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)} title={`${dayForm.date} — ${emp ? emp.first_name + ' ' + emp.last_name : ''}`}>
+          <form onSubmit={handleSaveDay} className="space-y-4">
+            <Field label="Tipo de jornada">
+              <select value={dayForm.type} onChange={e => setDayForm({ ...dayForm, type: e.target.value })} className={input}>
+                {Object.entries(TYPE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </Field>
+            {dayForm.type === 'work' && (
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Entrada"><input type="time" className={input} value={dayForm.check_in} onChange={e => setDayForm({ ...dayForm, check_in: e.target.value })} /></Field>
+                <Field label="Salida"><input type="time" className={input} value={dayForm.check_out} onChange={e => setDayForm({ ...dayForm, check_out: e.target.value })} /></Field>
+                <Field label="Horas"><input type="number" step="0.5" min="0" max="24" className={input} value={dayForm.hours} onChange={e => setDayForm({ ...dayForm, hours: e.target.value })} /></Field>
+              </div>
+            )}
+            <Field label="Notas (opcional)">
+              <input type="text" placeholder="Observaciones..." className={input} value={dayForm.notes} onChange={e => setDayForm({ ...dayForm, notes: e.target.value })} />
+            </Field>
+            <div className="flex gap-2">
+              {records[dayForm.date] && (
+                <button type="button" onClick={handleDeleteDay}
+                  className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-medium py-2.5 rounded-xl transition text-sm">
+                  Eliminar
+                </button>
+              )}
+              <button type="submit"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition text-sm">
+                Guardar
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─── Analíticas ───────────────────────────────────────────────────────────────
 function ReportsView({ company }) {
+  const [reportYear, setReportYear] = useState(2026)
+  const [tab, setTab] = useState('monthly')
   const [data, setData] = useState([])
+  const [empData, setEmpData] = useState([])
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
+      const { data: payrolls } = await supabase
         .from('orx_payrolls')
-        .select('month, year, salary_base, complements, cass_employee, cass_employer, irpf, net_salary, status, orx_employees!inner(company_id)')
+        .select('month, year, salary_base, complements, cass_employee, cass_employer, irpf, net_salary, status, employee_id, orx_employees!inner(company_id, first_name, last_name, position)')
         .eq('orx_employees.company_id', company.id)
-        .eq('year', 2026)
+        .eq('year', reportYear)
         .order('month')
-      setData(data || [])
+      setData(payrolls || [])
+
+      // group by employee for "Por empleado" tab
+      const byEmp = {}
+      payrolls?.forEach(p => {
+        if (!byEmp[p.employee_id]) byEmp[p.employee_id] = {
+          name: `${p.orx_employees.first_name} ${p.orx_employees.last_name}`,
+          position: p.orx_employees.position,
+          months: 0, bruto: 0, cassEmp: 0, cassPat: 0, irpf: 0, neto: 0,
+        }
+        const b = byEmp[p.employee_id]
+        const bruto = parseFloat(p.salary_base) + parseFloat(p.complements)
+        b.months++; b.bruto += bruto; b.cassEmp += parseFloat(p.cass_employee)
+        b.cassPat += parseFloat(p.cass_employer); b.irpf += parseFloat(p.irpf)
+        b.neto += parseFloat(p.net_salary)
+      })
+      setEmpData(Object.values(byEmp).sort((a, b) => b.bruto - a.bruto))
     }
     load()
-  }, [])
+  }, [reportYear])
 
   const byMonth = MONTHS.map((name, i) => {
     const rows = data.filter(p => p.month === i + 1)
     return {
-      name: name.slice(0, 3),
+      name: name.slice(0, 3), fullName: name,
       bruto: rows.reduce((s, p) => s + parseFloat(p.salary_base) + parseFloat(p.complements), 0),
       neto: rows.reduce((s, p) => s + parseFloat(p.net_salary), 0),
-      cass: rows.reduce((s, p) => s + parseFloat(p.cass_employer), 0),
+      cassEmp: rows.reduce((s, p) => s + parseFloat(p.cass_employee), 0),
+      cassPat: rows.reduce((s, p) => s + parseFloat(p.cass_employer), 0),
+      irpf: rows.reduce((s, p) => s + parseFloat(p.irpf), 0),
       count: rows.length,
     }
   }).filter(m => m.count > 0)
 
+  const totals = byMonth.reduce((acc, m) => ({
+    bruto: acc.bruto + m.bruto, neto: acc.neto + m.neto,
+    cassEmp: acc.cassEmp + m.cassEmp, cassPat: acc.cassPat + m.cassPat, irpf: acc.irpf + m.irpf,
+  }), { bruto: 0, neto: 0, cassEmp: 0, cassPat: 0, irpf: 0 })
+
   const maxVal = Math.max(...byMonth.map(m => m.bruto), 1)
+
+  const tabs = [
+    { key: 'monthly', label: 'Por mes' },
+    { key: 'employee', label: 'Por empleado' },
+    { key: 'fiscal', label: 'CASS / IRPF' },
+  ]
 
   return (
     <div className="p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Reportes 2026</h1>
-        <p className="text-slate-500 text-sm mt-1">Resumen por mes</p>
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Analíticas</h1>
+          <p className="text-slate-500 text-sm mt-1">Informes y toma de decisiones</p>
+        </div>
+        <select value={reportYear} onChange={e => setReportYear(parseInt(e.target.value))}
+          className="bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400 shadow-sm">
+          {[2024, 2025, 2026].map(y => <option key={y}>{y}</option>)}
+        </select>
       </div>
 
-      {/* Gráfico de barras manual */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="font-semibold text-slate-700 mb-6">Masa salarial bruta vs neta (€)</h2>
-        <div className="flex items-end gap-4 h-48">
-          {byMonth.map((m) => (
-            <div key={m.name} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex gap-1 items-end" style={{ height: '160px' }}>
-                <div className="flex-1 bg-indigo-200 rounded-t-lg transition-all" style={{ height: `${(m.bruto / maxVal) * 100}%` }} title={`Bruto: €${fmt(m.bruto)}`}></div>
-                <div className="flex-1 bg-emerald-400 rounded-t-lg transition-all" style={{ height: `${(m.neto / maxVal) * 100}%` }} title={`Neto: €${fmt(m.neto)}`}></div>
+      {/* KPIs anuales */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          ['Masa bruta', totals.bruto, 'slate'],
+          ['CASS obrera', totals.cassEmp, 'violet'],
+          ['CASS patronal', totals.cassPat, 'amber'],
+          ['IRPF', totals.irpf, 'rose'],
+          ['Masa neta', totals.neto, 'emerald'],
+        ].map(([l, v, c]) => (
+          <div key={l} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider leading-tight">{l}</p>
+            <p className={`text-lg font-bold mt-1 text-${c}-600`}>€{fmt(v)}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === t.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Por mes */}
+      {tab === 'monthly' && (<>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <h2 className="font-semibold text-slate-700 mb-6">Masa salarial bruta vs neta (€)</h2>
+          <div className="flex items-end gap-2 h-48">
+            {byMonth.map((m) => (
+              <div key={m.name} className="flex-1 flex flex-col items-center gap-1 group">
+                <div className="relative w-full flex gap-0.5 items-end" style={{ height: '160px' }}>
+                  <div className="flex-1 bg-indigo-200 hover:bg-indigo-300 rounded-t-lg transition-all cursor-default" style={{ height: `${(m.bruto / maxVal) * 100}%` }}>
+                    <span className="hidden group-hover:block absolute -top-6 left-0 text-xs bg-slate-800 text-white px-2 py-1 rounded whitespace-nowrap">€{fmt(m.bruto)}</span>
+                  </div>
+                  <div className="flex-1 bg-emerald-400 hover:bg-emerald-500 rounded-t-lg transition-all" style={{ height: `${(m.neto / maxVal) * 100}%` }}></div>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">{m.name}</span>
               </div>
-              <span className="text-xs text-slate-500 font-medium">{m.name}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-4 mt-4">
-          <div className="flex items-center gap-2"><div className="w-3 h-3 bg-indigo-200 rounded"></div><span className="text-xs text-slate-500">Bruto</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-400 rounded"></div><span className="text-xs text-slate-500">Neto</span></div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">
-            {['Mes', 'Empleados', 'Masa bruta', 'CASS obrera', 'CASS patronal', 'IRPF', 'Masa neta'].map(h => (
-              <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
             ))}
-          </tr></thead>
-          <tbody className="divide-y divide-slate-50">
-            {byMonth.map((m, i) => {
-              const rows = data.filter(p => p.month === i + 1)
-              const cassEmp = rows.reduce((s, p) => s + parseFloat(p.cass_employee), 0)
-              const cassPat = rows.reduce((s, p) => s + parseFloat(p.cass_employer), 0)
-              const irpf = rows.reduce((s, p) => s + parseFloat(p.irpf), 0)
-              return (
+          </div>
+          <div className="flex gap-4 mt-4">
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-indigo-200 rounded"></div><span className="text-xs text-slate-500">Bruto</span></div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-400 rounded"></div><span className="text-xs text-slate-500">Neto</span></div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead><tr className="bg-slate-50 border-b border-slate-100">
+              {['Mes', 'Empleados', 'Masa bruta', 'CASS obrera', 'CASS patronal', 'IRPF', 'Masa neta'].map(h => (
+                <th key={h} className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody className="divide-y divide-slate-50">
+              {byMonth.map((m) => (
                 <tr key={m.name} className="hover:bg-slate-50 transition">
-                  <td className="px-6 py-3.5 font-medium text-slate-700 text-sm">{MONTHS[data.find(p => p.month === byMonth.indexOf(m) + 1)?.month - 1] || m.name}</td>
+                  <td className="px-6 py-3.5 font-medium text-slate-700 text-sm">{m.fullName}</td>
                   <td className="px-6 py-3.5 text-slate-500 text-sm">{m.count}</td>
                   <td className="px-6 py-3.5 text-slate-700 text-sm font-medium">€{fmt(m.bruto)}</td>
-                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(cassEmp)}</td>
-                  <td className="px-6 py-3.5 text-amber-500 text-sm">€{fmt(cassPat)}</td>
-                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(irpf)}</td>
+                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(m.cassEmp)}</td>
+                  <td className="px-6 py-3.5 text-amber-500 text-sm">€{fmt(m.cassPat)}</td>
+                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(m.irpf)}</td>
                   <td className="px-6 py-3.5 font-bold text-emerald-600 text-sm">€{fmt(m.neto)}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+              {byMonth.length > 0 && (
+                <tr className="bg-slate-50 font-semibold">
+                  <td className="px-6 py-3.5 text-slate-700 text-sm">Total</td>
+                  <td className="px-6 py-3.5"></td>
+                  <td className="px-6 py-3.5 text-slate-700 text-sm">€{fmt(totals.bruto)}</td>
+                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(totals.cassEmp)}</td>
+                  <td className="px-6 py-3.5 text-amber-500 text-sm">€{fmt(totals.cassPat)}</td>
+                  <td className="px-6 py-3.5 text-rose-500 text-sm">€{fmt(totals.irpf)}</td>
+                  <td className="px-6 py-3.5 text-emerald-600 text-sm">€{fmt(totals.neto)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>)}
+
+      {/* Tab: Por empleado */}
+      {tab === 'employee' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead><tr className="bg-slate-50 border-b border-slate-100">
+              {['Empleado', 'Cargo', 'Meses', 'Bruto anual', 'CASS obrera', 'CASS patronal', 'IRPF', 'Coste total empresa', 'Neto anual'].map(h => (
+                <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody className="divide-y divide-slate-50">
+              {empData.map((e, i) => (
+                <tr key={i} className="hover:bg-slate-50 transition">
+                  <td className="px-5 py-4 font-medium text-slate-700 text-sm">{e.name}</td>
+                  <td className="px-5 py-4 text-sm"><span className="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-full">{e.position}</span></td>
+                  <td className="px-5 py-4 text-slate-500 text-sm">{e.months}</td>
+                  <td className="px-5 py-4 text-slate-700 text-sm font-medium">€{fmt(e.bruto)}</td>
+                  <td className="px-5 py-4 text-rose-500 text-sm">€{fmt(e.cassEmp)}</td>
+                  <td className="px-5 py-4 text-amber-500 text-sm">€{fmt(e.cassPat)}</td>
+                  <td className="px-5 py-4 text-rose-500 text-sm">€{fmt(e.irpf)}</td>
+                  <td className="px-5 py-4 font-bold text-slate-800 text-sm">€{fmt(e.bruto + e.cassPat)}</td>
+                  <td className="px-5 py-4 font-bold text-emerald-600 text-sm">€{fmt(e.neto)}</td>
+                </tr>
+              ))}
+              {empData.length === 0 && (
+                <tr><td colSpan={9} className="px-6 py-16 text-center text-slate-400 text-sm">No hay nóminas en {reportYear}.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Tab: CASS / IRPF */}
+      {tab === 'fiscal' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* CASS breakdown */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-700">Detalle CASS {reportYear}</h2>
+              <p className="text-slate-400 text-xs mt-0.5">Cotizaciones a la seguridad social andorrana</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between items-center p-4 bg-violet-50 rounded-xl">
+                <div><p className="text-sm font-semibold text-violet-700">CASS Obrera (6,1%)</p><p className="text-xs text-violet-500 mt-0.5">A cargo del trabajador</p></div>
+                <p className="text-xl font-bold text-violet-700">€{fmt(totals.cassEmp)}</p>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-amber-50 rounded-xl">
+                <div><p className="text-sm font-semibold text-amber-700">CASS Patronal (8,5%)</p><p className="text-xs text-amber-500 mt-0.5">A cargo de la empresa</p></div>
+                <p className="text-xl font-bold text-amber-700">€{fmt(totals.cassPat)}</p>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div><p className="text-sm font-semibold text-slate-700">Total CASS</p><p className="text-xs text-slate-400 mt-0.5">Obrera + Patronal</p></div>
+                <p className="text-xl font-bold text-slate-700">€{fmt(totals.cassEmp + totals.cassPat)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* IRPF breakdown */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-700">Detalle IRPF {reportYear}</h2>
+              <p className="text-slate-400 text-xs mt-0.5">Retenciones a cuenta del impuesto sobre la renta</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between items-center p-4 bg-rose-50 rounded-xl">
+                <div><p className="text-sm font-semibold text-rose-700">Total retenido</p><p className="text-xs text-rose-400 mt-0.5">Suma de retenciones mensuales</p></div>
+                <p className="text-xl font-bold text-rose-700">€{fmt(totals.irpf)}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tramos aplicados</p>
+                {[['Hasta €24.000 / año', '0%', 'bg-slate-50 text-slate-600'],['€24.001 – €40.000 / año', '5%', 'bg-blue-50 text-blue-700'],['Más de €40.000 / año', '10%', 'bg-indigo-50 text-indigo-700']].map(([label, rate, cls]) => (
+                  <div key={label} className={`flex justify-between items-center rounded-xl px-4 py-2.5 ${cls}`}>
+                    <span className="text-xs">{label}</span><span className="font-bold text-sm">{rate}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div><p className="text-sm font-semibold text-slate-700">Coste fiscal total empresa</p><p className="text-xs text-slate-400 mt-0.5">Bruto + CASS patronal</p></div>
+                <p className="text-xl font-bold text-slate-700">€{fmt(totals.bruto + totals.cassPat)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
