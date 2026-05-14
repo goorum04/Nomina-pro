@@ -1,81 +1,110 @@
-// App.jsx - ORX NÓMINA Frontend
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react'
+import { supabase } from './supabase'
 
-const API_URL = '/api';
+// Cálculos CASS e IRPF Andorra 2024
+const calcCASS = (base) => ({
+  employee: Math.round(base * 0.061 * 100) / 100,
+  employer: Math.round(base * 0.085 * 100) / 100,
+})
 
-// ============ COMPONENTE PRINCIPAL ============
+const calcIRPF = (base, cassEmployee) => {
+  const taxable = base - cassEmployee
+  let irpf = 0
+  if (taxable <= 28000) irpf = taxable * 0.05
+  else if (taxable <= 45000) irpf = 1400 + (taxable - 28000) * 0.10
+  else if (taxable <= 67000) irpf = 2900 + (taxable - 45000) * 0.15
+  else if (taxable <= 145000) irpf = 5200 + (taxable - 67000) * 0.20
+  else irpf = 21800 + (taxable - 145000) * 0.24
+  return Math.round(irpf * 100) / 100
+}
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [currentPage, setCurrentPage] = useState('login');
+  const [session, setSession] = useState(null)
+  const [company, setCompany] = useState(null)
+  const [page, setPage] = useState('login')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setCurrentUser(JSON.parse(localStorage.getItem('user')));
-      setCurrentPage('dashboard');
-    }
-  }, []);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) loadCompany(session.user.id)
+      else setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      if (session) loadCompany(session.user.id)
+      else { setCompany(null); setLoading(false) }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const loadCompany = async (userId) => {
+    const { data } = await supabase
+      .from('orx_companies')
+      .select('*')
+      .eq('owner_id', userId)
+      .single()
+    setCompany(data)
+    setLoading(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <p className="text-gray-500 text-lg">Cargando...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {currentUser ? (
-        <Dashboard 
-          user={currentUser} 
-          onLogout={() => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setCurrentUser(null);
-            setCurrentPage('login');
+      {session && company ? (
+        <Dashboard
+          user={session.user}
+          company={company}
+          onLogout={async () => {
+            await supabase.auth.signOut()
+            setSession(null)
+            setCompany(null)
           }}
         />
       ) : (
-        <AuthPage onLogin={setCurrentUser} onSwitchPage={setCurrentPage} currentPage={currentPage} />
+        <AuthPage onCompany={setCompany} page={page} setPage={setPage} />
       )}
     </div>
-  );
+  )
 }
 
-// ============ PÁGINA DE AUTENTICACIÓN ============
-function AuthPage({ onLogin, onSwitchPage, currentPage }) {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    company_name: '',
-    name: ''
-  });
+// ============ AUTENTICACIÓN ============
+function AuthPage({ onCompany, page, setPage }) {
+  const [form, setForm] = useState({ email: '', password: '', company_name: '' })
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API_URL}/auth/login`, {
-        email: formData.email,
-        password: formData.password
-      });
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      onLogin(response.data.user);
-    } catch (error) {
-      alert('Error: ' + error.response?.data?.error);
-    }
-  };
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    const { error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password })
+    if (error) setError(error.message)
+    setSubmitting(false)
+  }
 
   const handleRegister = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API_URL}/auth/register`, {
-        email: formData.email,
-        password: formData.password,
-        company_name: formData.company_name,
-        name: formData.name
-      });
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      onLogin(response.data.user);
-    } catch (error) {
-      alert('Error: ' + error.response?.data?.error);
-    }
-  };
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    const { data, error } = await supabase.auth.signUp({ email: form.email, password: form.password })
+    if (error) { setError(error.message); setSubmitting(false); return }
+    const { data: company, error: compErr } = await supabase
+      .from('orx_companies')
+      .insert({ name: form.company_name, owner_id: data.user.id })
+      .select()
+      .single()
+    if (compErr) { setError(compErr.message); setSubmitting(false); return }
+    onCompany(company)
+    setSubmitting(false)
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen">
@@ -83,82 +112,49 @@ function AuthPage({ onLogin, onSwitchPage, currentPage }) {
         <h1 className="text-4xl font-bold text-center text-blue-600 mb-2">ORX</h1>
         <h2 className="text-center text-gray-600 mb-8">Gestión Integral de Nóminas</h2>
 
-        {currentPage === 'login' ? (
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+            {error}
+          </div>
+        )}
+
+        {page === 'login' ? (
           <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="email"
-              placeholder="Email"
+            <input type="email" placeholder="Email" required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <input
-              type="password"
-              placeholder="Contraseña"
+              value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+            <input type="password" placeholder="Contraseña" required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
-            >
-              Iniciar Sesión
+              value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+            <button type="submit" disabled={submitting}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50">
+              {submitting ? 'Entrando...' : 'Iniciar Sesión'}
             </button>
-            <p className="text-center text-gray-600">
+            <p className="text-center text-gray-600 text-sm">
               ¿No tienes cuenta?{' '}
-              <button
-                type="button"
-                onClick={() => onSwitchPage('register')}
-                className="text-blue-600 hover:underline"
-              >
+              <button type="button" onClick={() => setPage('register')} className="text-blue-600 hover:underline">
                 Regístrate aquí
               </button>
             </p>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Nombre de empresa"
+            <input type="text" placeholder="Nombre de empresa" required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.company_name}
-              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Tu nombre"
+              value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} />
+            <input type="email" placeholder="Email" required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-            <input
-              type="email"
-              placeholder="Email"
+              value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+            <input type="password" placeholder="Contraseña (mínimo 6 caracteres)" required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <input
-              type="password"
-              placeholder="Contraseña"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
-            >
-              Crear Cuenta
+              value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+            <button type="submit" disabled={submitting}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50">
+              {submitting ? 'Creando cuenta...' : 'Crear Cuenta'}
             </button>
-            <p className="text-center text-gray-600">
+            <p className="text-center text-gray-600 text-sm">
               ¿Ya tienes cuenta?{' '}
-              <button
-                type="button"
-                onClick={() => onSwitchPage('login')}
-                className="text-blue-600 hover:underline"
-              >
+              <button type="button" onClick={() => setPage('login')} className="text-blue-600 hover:underline">
                 Inicia sesión aquí
               </button>
             </p>
@@ -166,48 +162,29 @@ function AuthPage({ onLogin, onSwitchPage, currentPage }) {
         )}
       </div>
     </div>
-  );
+  )
 }
 
 // ============ DASHBOARD PRINCIPAL ============
-function Dashboard({ user, onLogout }) {
-  const [activePage, setActivePage] = useState('dashboard');
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(false);
+function Dashboard({ user, company, onLogout }) {
+  const [activePage, setActivePage] = useState('dashboard')
 
-  const token = localStorage.getItem('token');
-
-  useEffect(() => {
-    if (activePage === 'employees') {
-      loadEmployees();
-    }
-  }, [activePage]);
-
-  const loadEmployees = async () => {
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/employees`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setEmployees(response.data);
-    } catch (error) {
-      alert('Error al cargar empleados');
-    }
-    setLoading(false);
-  };
+  const navItems = [
+    ['dashboard', '📊 Dashboard'],
+    ['employees', '👥 Empleados'],
+    ['payroll', '💰 Nóminas'],
+    ['reports', '📈 Reportes'],
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
       <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-blue-600">ORX Nómina</h1>
           <div className="flex items-center gap-4">
-            <span className="text-gray-600">Bienvenido, {user.email}</span>
-            <button
-              onClick={onLogout}
-              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
-            >
+            <span className="text-gray-600 text-sm">{company.name} · {user.email}</span>
+            <button onClick={onLogout}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition text-sm">
               Cerrar Sesión
             </button>
           </div>
@@ -215,278 +192,295 @@ function Dashboard({ user, onLogout }) {
       </nav>
 
       <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white shadow-lg">
-          <div className="p-6 space-y-4">
-            <button
-              onClick={() => setActivePage('dashboard')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                activePage === 'dashboard'
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📊 Dashboard
-            </button>
-            <button
-              onClick={() => setActivePage('employees')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                activePage === 'employees'
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              👥 Empleados
-            </button>
-            <button
-              onClick={() => setActivePage('payroll')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                activePage === 'payroll'
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              💰 Nóminas
-            </button>
-            <button
-              onClick={() => setActivePage('reports')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition ${
-                activePage === 'reports'
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-100'
-              }`}
-            >
-              📈 Reportes
-            </button>
+        <aside className="w-60 bg-white shadow-lg min-h-screen">
+          <div className="p-4 space-y-1 pt-6">
+            {navItems.map(([key, label]) => (
+              <button key={key} onClick={() => setActivePage(key)}
+                className={`w-full text-left px-4 py-2 rounded-lg transition text-sm font-medium ${
+                  activePage === key ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'
+                }`}>
+                {label}
+              </button>
+            ))}
           </div>
         </aside>
 
-        {/* Contenido Principal */}
         <main className="flex-1 p-8">
-          {activePage === 'dashboard' && <DashboardView token={token} />}
-          {activePage === 'employees' && (
-            <EmployeesView employees={employees} loading={loading} onRefresh={loadEmployees} token={token} />
-          )}
-          {activePage === 'payroll' && <PayrollView token={token} />}
-          {activePage === 'reports' && <ReportsView token={token} />}
+          {activePage === 'dashboard' && <DashboardView company={company} />}
+          {activePage === 'employees' && <EmployeesView company={company} />}
+          {activePage === 'payroll' && <PayrollView company={company} />}
+          {activePage === 'reports' && <ReportsView />}
         </main>
       </div>
     </div>
-  );
+  )
 }
 
-// ============ VISTA: DASHBOARD ============
-function DashboardView({ token }) {
-  const [dashData, setDashData] = useState(null);
+// ============ VISTA DASHBOARD ============
+function DashboardView({ company }) {
+  const [stats, setStats] = useState({ employees: 0, payroll: 0, cass: 0 })
 
   useEffect(() => {
-    axios.get(`${API_URL}/reports/dashboard`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(res => setDashData(res.data));
-  }, [token]);
+    const load = async () => {
+      const { count } = await supabase
+        .from('orx_employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', company.id)
+        .eq('status', 'active')
+
+      const { data: payrolls } = await supabase
+        .from('orx_payrolls')
+        .select('net_salary, cass_employer, orx_employees!inner(company_id)')
+        .eq('orx_employees.company_id', company.id)
+        .eq('status', 'approved')
+
+      const totalPayroll = payrolls?.reduce((s, p) => s + parseFloat(p.net_salary || 0), 0) || 0
+      const totalCass = payrolls?.reduce((s, p) => s + parseFloat(p.cass_employer || 0), 0) || 0
+
+      setStats({ employees: count || 0, payroll: totalPayroll, cass: totalCass })
+    }
+    load()
+  }, [company.id])
 
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
-      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-600 text-sm font-semibold">Total Empleados</h3>
-          <p className="text-4xl font-bold text-blue-600 mt-2">{dashData?.totalEmployees || 0}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-600 text-sm font-semibold">Nómina Mensual</h3>
-          <p className="text-4xl font-bold text-green-600 mt-2">€{dashData?.totalMonthlyPayroll?.toFixed(2) || '0.00'}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-gray-600 text-sm font-semibold">Estado CASS</h3>
-          <p className="text-lg font-semibold text-yellow-600 mt-2">Configurando...</p>
+        <StatCard label="Total Empleados" value={stats.employees} color="text-blue-600" />
+        <StatCard label="Nómina Neta Aprobada" value={`€${stats.payroll.toFixed(2)}`} color="text-green-600" />
+        <StatCard label="CASS Patronal Aprobada" value={`€${stats.cass.toFixed(2)}`} color="text-yellow-600" />
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="font-semibold text-gray-700 mb-3">Tasas CASS Andorra 2024</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="bg-blue-50 rounded p-3">
+            <p className="text-gray-500">Cotización Obrera</p>
+            <p className="text-2xl font-bold text-blue-600">6.1%</p>
+          </div>
+          <div className="bg-orange-50 rounded p-3">
+            <p className="text-gray-500">Cotización Patronal</p>
+            <p className="text-2xl font-bold text-orange-600">8.5%</p>
+          </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-// ============ VISTA: EMPLEADOS ============
-function EmployeesView({ employees, loading, onRefresh, token }) {
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    nif: '',
-    hire_date: '',
-    position: '',
-    salary_base: '',
-    bank_account: ''
-  });
+function StatCard({ label, value, color }) {
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <h3 className="text-gray-500 text-sm font-semibold">{label}</h3>
+      <p className={`text-4xl font-bold mt-2 ${color}`}>{value}</p>
+    </div>
+  )
+}
+
+// ============ VISTA EMPLEADOS ============
+function EmployeesView({ company }) {
+  const [employees, setEmployees] = useState([])
+  const [showModal, setShowModal] = useState(false)
+  const [form, setForm] = useState({ first_name: '', last_name: '', nif: '', hire_date: '', position: '', salary_base: '', bank_account: '' })
+  const [error, setError] = useState('')
+
+  useEffect(() => { loadEmployees() }, [])
+
+  const loadEmployees = async () => {
+    const { data } = await supabase
+      .from('orx_employees')
+      .select('*')
+      .eq('company_id', company.id)
+      .order('last_name')
+    setEmployees(data || [])
+  }
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(`${API_URL}/employees`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setShowModal(false);
-      setFormData({
-        first_name: '', last_name: '', nif: '', hire_date: '',
-        position: '', salary_base: '', bank_account: ''
-      });
-      onRefresh();
-    } catch (error) {
-      alert('Error al crear empleado');
-    }
-  };
+    e.preventDefault()
+    setError('')
+    const { error } = await supabase.from('orx_employees').insert({
+      ...form,
+      company_id: company.id,
+      salary_base: parseFloat(form.salary_base),
+    })
+    if (error) { setError(error.message); return }
+    setShowModal(false)
+    setForm({ first_name: '', last_name: '', nif: '', hire_date: '', position: '', salary_base: '', bank_account: '' })
+    loadEmployees()
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Eliminar este empleado?')) return
+    await supabase.from('orx_employees').delete().eq('id', id)
+    loadEmployees()
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-800">Gestión de Empleados</h2>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
+        <h2 className="text-3xl font-bold text-gray-800">Empleados</h2>
+        <button onClick={() => setShowModal(true)}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
           + Nuevo Empleado
         </button>
       </div>
 
-      {loading ? (
-        <p>Cargando...</p>
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-100 border-b">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">NIF</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Posición</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Salario</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map((emp) => (
-                <tr key={emp.id} className="border-b hover:bg-gray-50">
-                  <td className="px-6 py-3">{emp.first_name} {emp.last_name}</td>
-                  <td className="px-6 py-3">{emp.nif}</td>
-                  <td className="px-6 py-3">{emp.position}</td>
-                  <td className="px-6 py-3">€{emp.salary_base}</td>
-                  <td className="px-6 py-3">
-                    <button className="text-blue-600 hover:underline mr-4">Editar</button>
-                    <button className="text-red-600 hover:underline">Eliminar</button>
-                  </td>
-                </tr>
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-100 border-b">
+            <tr>
+              {['Nombre', 'NIF', 'Posición', 'Salario Base', 'Acciones'].map(h => (
+                <th key={h} className="px-6 py-3 text-left text-sm font-semibold text-gray-700">{h}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map(emp => (
+              <tr key={emp.id} className="border-b hover:bg-gray-50">
+                <td className="px-6 py-3 font-medium">{emp.first_name} {emp.last_name}</td>
+                <td className="px-6 py-3 text-gray-500">{emp.nif}</td>
+                <td className="px-6 py-3">{emp.position}</td>
+                <td className="px-6 py-3 font-semibold">€{Number(emp.salary_base).toLocaleString('es')}</td>
+                <td className="px-6 py-3">
+                  <button onClick={() => handleDelete(emp.id)} className="text-red-500 hover:underline text-sm">
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {employees.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                  No hay empleados. Añade el primero.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
+        <Modal onClose={() => { setShowModal(false); setError('') }}>
           <h3 className="text-xl font-bold mb-4">Nuevo Empleado</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Nombre"
+          {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input type="text" placeholder="Nombre" required
+                className="px-4 py-2 border rounded-lg w-full"
+                value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
+              <input type="text" placeholder="Apellido" required
+                className="px-4 py-2 border rounded-lg w-full"
+                value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
+            </div>
+            <input type="text" placeholder="NIF" required
               className="w-full px-4 py-2 border rounded-lg"
-              value={formData.first_name}
-              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Apellido"
+              value={form.nif} onChange={e => setForm({ ...form, nif: e.target.value })} />
+            <input type="date" required
               className="w-full px-4 py-2 border rounded-lg"
-              value={formData.last_name}
-              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="NIF"
+              value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} />
+            <input type="text" placeholder="Posición" required
               className="w-full px-4 py-2 border rounded-lg"
-              value={formData.nif}
-              onChange={(e) => setFormData({ ...formData, nif: e.target.value })}
-              required
-            />
-            <input
-              type="date"
+              value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
+            <input type="number" placeholder="Salario Base (€)" required min="0" step="0.01"
               className="w-full px-4 py-2 border rounded-lg"
-              value={formData.hire_date}
-              onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Posición"
+              value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} />
+            <input type="text" placeholder="IBAN (opcional)"
               className="w-full px-4 py-2 border rounded-lg"
-              value={formData.position}
-              onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-              required
-            />
-            <input
-              type="number"
-              placeholder="Salario Base"
-              className="w-full px-4 py-2 border rounded-lg"
-              value={formData.salary_base}
-              onChange={(e) => setFormData({ ...formData, salary_base: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Cuenta Bancaria"
-              className="w-full px-4 py-2 border rounded-lg"
-              value={formData.bank_account}
-              onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
-            />
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
-            >
+              value={form.bank_account} onChange={e => setForm({ ...form, bank_account: e.target.value })} />
+            <button type="submit"
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold">
               Crear Empleado
             </button>
           </form>
         </Modal>
       )}
     </div>
-  );
+  )
 }
 
-// ============ VISTA: NÓMINAS ============
-function PayrollView({ token }) {
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [payrolls, setPayrolls] = useState([]);
+// ============ VISTA NÓMINAS ============
+function PayrollView({ company }) {
+  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [payrolls, setPayrolls] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [showModal, setShowModal] = useState(false)
+  const [genForm, setGenForm] = useState({ employee_id: '', complements: '' })
+  const [preview, setPreview] = useState(null)
 
+  useEffect(() => { loadPayrolls() }, [month, year])
   useEffect(() => {
-    axios.get(`${API_URL}/payrolls/${month}/${year}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(res => setPayrolls(res.data));
-  }, [month, year, token]);
+    supabase.from('orx_employees').select('id,first_name,last_name,salary_base')
+      .eq('company_id', company.id).eq('status', 'active')
+      .then(({ data }) => setEmployees(data || []))
+  }, [])
+
+  const loadPayrolls = async () => {
+    const { data } = await supabase
+      .from('orx_payrolls')
+      .select('*, orx_employees(first_name, last_name)')
+      .eq('month', month)
+      .eq('year', year)
+      .order('created_at')
+    setPayrolls(data || [])
+  }
+
+  const handleEmployeeChange = (empId) => {
+    setGenForm({ ...genForm, employee_id: empId, complements: '' })
+    setPreview(null)
+  }
+
+  const calcPreview = () => {
+    const emp = employees.find(e => e.id === genForm.employee_id)
+    if (!emp) return
+    const total = parseFloat(emp.salary_base) + parseFloat(genForm.complements || 0)
+    const cass = calcCASS(total)
+    const irpf = calcIRPF(total, cass.employee)
+    const net = total - cass.employee - irpf
+    setPreview({ total, cass, irpf, net, emp })
+  }
+
+  const handleGenerate = async (e) => {
+    e.preventDefault()
+    if (!preview) return
+    await supabase.from('orx_payrolls').upsert({
+      employee_id: genForm.employee_id, month, year,
+      salary_base: preview.emp.salary_base,
+      complements: parseFloat(genForm.complements || 0),
+      cass_employee: preview.cass.employee,
+      cass_employer: preview.cass.employer,
+      irpf: preview.irpf,
+      net_salary: preview.net,
+      status: 'draft',
+    })
+    setShowModal(false)
+    setPreview(null)
+    setGenForm({ employee_id: '', complements: '' })
+    loadPayrolls()
+  }
+
+  const handleApprove = async (id) => {
+    await supabase.from('orx_payrolls').update({ status: 'approved' }).eq('id', id)
+    loadPayrolls()
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <h2 className="text-3xl font-bold text-gray-800">Nóminas</h2>
-        <div className="flex gap-4">
-          <select
-            value={month}
-            onChange={(e) => setMonth(parseInt(e.target.value))}
-            className="px-4 py-2 border rounded-lg"
-          >
-            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
-              <option key={m} value={m}>Mes {m}</option>
-            ))}
+        <div className="flex gap-3 flex-wrap">
+          <select value={month} onChange={e => setMonth(parseInt(e.target.value))}
+            className="px-4 py-2 border rounded-lg">
+            {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+              .map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </select>
-          <select
-            value={year}
-            onChange={(e) => setYear(parseInt(e.target.value))}
-            className="px-4 py-2 border rounded-lg"
-          >
-            {[2024, 2025, 2026].map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
+          <select value={year} onChange={e => setYear(parseInt(e.target.value))}
+            className="px-4 py-2 border rounded-lg">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+          <button onClick={() => setShowModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            + Generar Nómina
+          </button>
         </div>
       </div>
 
@@ -494,63 +488,107 @@ function PayrollView({ token }) {
         <table className="w-full">
           <thead className="bg-gray-100 border-b">
             <tr>
-              <th className="px-6 py-3 text-left">Empleado</th>
-              <th className="px-6 py-3 text-left">Bruto</th>
-              <th className="px-6 py-3 text-left">CASS</th>
-              <th className="px-6 py-3 text-left">IRPF</th>
-              <th className="px-6 py-3 text-left">Neto</th>
-              <th className="px-6 py-3 text-left">Estado</th>
+              {['Empleado', 'Bruto', 'CASS (6.1%)', 'IRPF', 'Neto', 'Estado', ''].map(h => (
+                <th key={h} className="px-6 py-3 text-left text-sm font-semibold text-gray-700">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {payrolls.map((p) => (
+            {payrolls.map(p => (
               <tr key={p.id} className="border-b hover:bg-gray-50">
-                <td className="px-6 py-3">{p.first_name} {p.last_name}</td>
-                <td className="px-6 py-3">€{(p.salary_base + p.complements).toFixed(2)}</td>
-                <td className="px-6 py-3">€{p.cass_employee.toFixed(2)}</td>
-                <td className="px-6 py-3">€{p.irpf.toFixed(2)}</td>
-                <td className="px-6 py-3 font-bold text-green-600">€{p.net_salary.toFixed(2)}</td>
+                <td className="px-6 py-3 font-medium">{p.orx_employees?.first_name} {p.orx_employees?.last_name}</td>
+                <td className="px-6 py-3">€{(parseFloat(p.salary_base) + parseFloat(p.complements)).toFixed(2)}</td>
+                <td className="px-6 py-3">€{parseFloat(p.cass_employee).toFixed(2)}</td>
+                <td className="px-6 py-3">€{parseFloat(p.irpf).toFixed(2)}</td>
+                <td className="px-6 py-3 font-bold text-green-600">€{parseFloat(p.net_salary).toFixed(2)}</td>
                 <td className="px-6 py-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                     p.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {p.status}
-                  </span>
+                  }`}>{p.status === 'approved' ? 'Aprobada' : 'Borrador'}</span>
+                </td>
+                <td className="px-6 py-3">
+                  {p.status === 'draft' && (
+                    <button onClick={() => handleApprove(p.id)}
+                      className="text-blue-600 hover:underline text-sm">Aprobar</button>
+                  )}
                 </td>
               </tr>
             ))}
+            {payrolls.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  No hay nóminas para este período.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <Modal onClose={() => { setShowModal(false); setPreview(null) }}>
+          <h3 className="text-xl font-bold mb-4">Generar Nómina</h3>
+          <form onSubmit={handleGenerate} className="space-y-4">
+            <select required value={genForm.employee_id}
+              onChange={e => handleEmployeeChange(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg">
+              <option value="">Seleccionar empleado...</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.first_name} {emp.last_name} — €{Number(emp.salary_base).toLocaleString('es')}
+                </option>
+              ))}
+            </select>
+            <input type="number" placeholder="Complementos €" min="0" step="0.01"
+              className="w-full px-4 py-2 border rounded-lg"
+              value={genForm.complements} onChange={e => { setGenForm({ ...genForm, complements: e.target.value }); setPreview(null) }} />
+            <button type="button" onClick={calcPreview}
+              className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 font-medium">
+              Calcular Preview
+            </button>
+            {preview && (
+              <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1">
+                <div className="flex justify-between"><span>Salario Bruto</span><span className="font-semibold">€{preview.total.toFixed(2)}</span></div>
+                <div className="flex justify-between text-red-600"><span>CASS obrera (6.1%)</span><span>-€{preview.cass.employee.toFixed(2)}</span></div>
+                <div className="flex justify-between text-red-600"><span>IRPF</span><span>-€{preview.irpf.toFixed(2)}</span></div>
+                <div className="flex justify-between font-bold text-green-700 border-t pt-1 mt-1"><span>Salario Neto</span><span>€{preview.net.toFixed(2)}</span></div>
+                <div className="flex justify-between text-orange-600 text-xs pt-1"><span>CASS patronal (8.5%)</span><span>€{preview.cass.employer.toFixed(2)}</span></div>
+              </div>
+            )}
+            <button type="submit" disabled={!preview}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-40">
+              Guardar Nómina
+            </button>
+          </form>
+        </Modal>
+      )}
     </div>
-  );
+  )
 }
 
-// ============ VISTA: REPORTES ============
-function ReportsView({ token }) {
+// ============ VISTA REPORTES ============
+function ReportsView() {
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold text-gray-800">Reportes</h2>
-      <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-gray-600">Los reportes avanzados estarán disponibles próximamente.</p>
+      <div className="bg-white rounded-lg shadow p-6 text-gray-500">
+        Reportes avanzados disponibles próximamente.
       </div>
     </div>
-  );
+  )
 }
 
-// ============ COMPONENTE: MODAL ============
+// ============ MODAL ============
 function Modal({ onClose, children }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-        <button
-          onClick={onClose}
-          className="float-right text-gray-500 hover:text-gray-700 text-2xl"
-        >
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md relative">
+        <button onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl leading-none">
           ×
         </button>
         {children}
       </div>
     </div>
-  );
+  )
 }
